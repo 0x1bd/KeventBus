@@ -22,3 +22,14 @@ tasks.test {
 kotlin {
     jvmToolchain(21)
 }
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            groupId = "com.github.meo209"
+            artifactId = "keventbus" // Replace with your desired artifact ID
+            version = "1.0-SNAPSHOT"
+        }
+    }
+}
