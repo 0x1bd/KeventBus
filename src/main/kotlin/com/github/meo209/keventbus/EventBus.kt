@@ -4,6 +4,7 @@ import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.full.hasAnnotation
 import kotlin.reflect.jvm.isAccessible
+import java.util.concurrent.CopyOnWriteArrayList
 
 class EventBus private constructor() {
 
@@ -15,17 +16,20 @@ class EventBus private constructor() {
         fun createScoped(): EventBus = EventBus()
     }
 
-    private val handlers = mutableMapOf<KClass<*>, MutableList<(Event) -> Unit>>()
+    private val handlers = mutableMapOf<KClass<*>, CopyOnWriteArrayList<(Event) -> Unit>>()
 
     fun <T : Event> handler(eventClass: KClass<T>, handler: (T) -> Unit) {
         @Suppress("UNCHECKED_CAST")
-        val typedHandlers = handlers.getOrPut(eventClass) { mutableListOf() } as MutableList<(T) -> Unit>
+        val typedHandlers =
+            handlers.getOrPut(eventClass) { CopyOnWriteArrayList() } as CopyOnWriteArrayList<(T) -> Unit>
 
         typedHandlers.add(handler)
     }
 
     @Suppress("UNCHECKED_CAST")
     fun <T : Event> function(function: KFunction<*>) {
+        if (function.parameters.size != 1)
+            throw IllegalStateException("Function doesnt have the required event as a parameter.")
         val eventClass = function.parameters.last().type.classifier as? KClass<T> ?: return
         if (Event::class.java.isAssignableFrom(eventClass.java)) {
             if (function.hasAnnotation<FunctionTarget>()) {
