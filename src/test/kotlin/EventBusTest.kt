@@ -1,6 +1,5 @@
 import com.github.meo209.keventbus.Event
 import com.github.meo209.keventbus.EventBus
-import com.github.meo209.keventbus.FunctionTarget
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,13 +11,10 @@ class EventBusTest {
     private var scopedTargetCalled = false
     private var contextAwareTargetCalled = false
 
-    @FunctionTarget
     private fun functionTarget(event: ExampleEvent) {
         functionTargetCalled = true
     }
-
-    private fun functionTargetWithoutAnnotation(event: ExampleEvent3) {}
-
+    
     @Test
     fun globalTest() {
         // Register a direct handler
@@ -27,11 +23,7 @@ class EventBusTest {
         })
 
         // Register a function target
-        EventBus.global().function<ExampleEvent>(::functionTarget)
-
-        assertThrows<IllegalStateException> {
-            EventBus.global().function<ExampleEvent3>(::functionTargetWithoutAnnotation)
-        }
+        EventBus.global().function(::functionTarget)
 
         // Post an event and check if both handlers are called
         EventBus.global().post(ExampleEvent())
