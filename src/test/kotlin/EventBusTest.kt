@@ -10,11 +10,12 @@ class EventBusTest {
     private var directTargetCalled = false
     private var scopedTargetCalled = false
     private var contextAwareTargetCalled = false
+    private var inheritanceTargetCalled = false
 
     private fun functionTarget(event: ExampleEvent) {
         functionTargetCalled = true
     }
-    
+
     @Test
     fun globalTest() {
         // Register a direct handler
@@ -76,7 +77,27 @@ class EventBusTest {
         assertEquals(true, contextAwareTargetCalled, "Context-aware handler should have been called")
     }
 
+    @Test
+    fun inheritanceTest() {
+        // Create an EventBus with event inheritance enabled
+        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_EVENT_INHERITANCE)))
+
+        // Register a handler for the base event
+        eventBus.handler(BaseEvent::class, { event ->
+            inheritanceTargetCalled = true
+        })
+
+        // Post a subclass event
+        eventBus.post(SpecificEvent())
+
+        // Assert that the handler for the base event was called
+        assertEquals(true, inheritanceTargetCalled, "Handler for BaseEvent should have been called")
+    }
+
     class ExampleEvent(val shouldHandle: Boolean = true) : Event
     class ExampleEvent2 : Event
-    class ExampleEvent3 : Event
+
+    // Define an event hierarchy for inheritance testing
+    open class BaseEvent : Event
+    class SpecificEvent : BaseEvent()
 }
