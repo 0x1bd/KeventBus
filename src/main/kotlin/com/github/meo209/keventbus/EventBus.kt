@@ -28,7 +28,7 @@ class EventBus private constructor(config: EventBusConfig = EventBusConfig()) {
      * Configuration flags for the EventBus.
      */
     enum class EventBusConfigFlag {
-        ENABLE_EVENT_INHERITANCE // Add more flags as needed
+        ENABLE_EVENT_INHERITANCE
     }
 
     /**
