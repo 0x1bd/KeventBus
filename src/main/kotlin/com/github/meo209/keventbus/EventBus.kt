@@ -3,6 +3,7 @@ package com.github.meo209.keventbus
 import kotlin.reflect.KClass
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 /**
  * A synchronous event bus that allows components to communicate by publishing and subscribing to events.
@@ -11,7 +12,12 @@ import java.util.concurrent.ConcurrentHashMap
 class EventBus private constructor(config: EventBusConfig = EventBusConfig()) {
 
     companion object {
-        private val globalBus = EventBus()
+        private val globalBus = EventBus(
+            EventBusConfig(setOf(
+                EventBusConfigFlag.ENABLE_EVENT_FILTERING,
+                EventBusConfigFlag.ENABLE_EVENT_INHERITANCE
+            ))
+        )
 
         /**
          * Returns the global singleton instance of the [EventBus].
@@ -28,7 +34,10 @@ class EventBus private constructor(config: EventBusConfig = EventBusConfig()) {
      * Configuration flags for the EventBus.
      */
     enum class EventBusConfigFlag {
-        ENABLE_EVENT_INHERITANCE
+        ENABLE_EVENT_INHERITANCE,
+        ENABLE_ASYNC_PROCESSING,
+        ENABLE_EVENT_FILTERING,
+        ENABLE_EVENT_TRACING
     }
 
     /**
@@ -47,6 +56,7 @@ class EventBus private constructor(config: EventBusConfig = EventBusConfig()) {
 
     private val handlers = ConcurrentHashMap<KClass<*>, CopyOnWriteArrayList<Handler<*>>>()
     private val config: EventBusConfig
+    private val executor = Executors.newCachedThreadPool()
 
     init {
         this.config = config
@@ -78,11 +88,32 @@ class EventBus private constructor(config: EventBusConfig = EventBusConfig()) {
      * Posts an event to the event bus.
      */
     fun <T : Event> post(event: T) {
+        if (config.isEnabled(EventBusConfigFlag.ENABLE_EVENT_TRACING)) {
+            println("Event posted: ${event::class.simpleName}")
+        }
+
+        if (config.isEnabled(EventBusConfigFlag.ENABLE_EVENT_FILTERING) && !shouldProcessEvent(event)) {
+            return
+        }
+
+        if (config.isEnabled(EventBusConfigFlag.ENABLE_ASYNC_PROCESSING)) {
+            executor.submit {
+                processEvent(event)
+            }
+        } else {
+            processEvent(event)
+        }
+    }
+
+    private fun <T : Event> shouldProcessEvent(event: T): Boolean {
+        // Placeholder for custom event filtering logic
+        return true
+    }
+
+    private fun <T : Event> processEvent(event: T) {
         if (config.isEnabled(EventBusConfigFlag.ENABLE_EVENT_INHERITANCE)) {
-            // Handle event inheritance
             postWithInheritance(event)
         } else {
-            // Default behavior without inheritance
             postToHandlers(event::class, event)
         }
     }
@@ -105,6 +136,9 @@ class EventBus private constructor(config: EventBusConfig = EventBusConfig()) {
         handlers[eventClass]?.forEach { handler ->
             @Suppress("UNCHECKED_CAST") val typedHandler = handler as Handler<T>
             if (typedHandler.contextFilter(event)) {
+                if (config.isEnabled(EventBusConfigFlag.ENABLE_EVENT_TRACING)) {
+                    println("Event handled by: ${typedHandler.handler}")
+                }
                 typedHandler.handler(event)
             }
         }

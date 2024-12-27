@@ -11,6 +11,9 @@ class EventBusTest {
     private var scopedTargetCalled = false
     private var contextAwareTargetCalled = false
     private var inheritanceTargetCalled = false
+    private var asyncTargetCalled = false
+    private var filteredEventHandled = false
+    private var tracedEventHandled = false
 
     private fun functionTarget(event: ExampleEvent) {
         functionTargetCalled = true
@@ -92,6 +95,60 @@ class EventBusTest {
 
         // Assert that the handler for the base event was called
         assertEquals(true, inheritanceTargetCalled, "Handler for BaseEvent should have been called")
+    }
+
+    @Test
+    fun asyncProcessingTest() {
+        // Create an EventBus with async processing enabled
+        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_ASYNC_PROCESSING)))
+
+        // Register a handler
+        eventBus.handler(ExampleEvent::class, { event ->
+            asyncTargetCalled = true
+        })
+
+        // Post an event
+        eventBus.post(ExampleEvent())
+
+        // Wait for the async processing to complete
+        Thread.sleep(100)
+
+        // Assert that the handler was called
+        assertEquals(true, asyncTargetCalled, "Handler should have been called asynchronously")
+    }
+
+    @Test
+    fun eventFilteringTest() {
+        // Create an EventBus with event filtering enabled
+        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_EVENT_FILTERING)))
+
+        // Register a handler
+        eventBus.handler(ExampleEvent::class, { event ->
+            filteredEventHandled = true
+        }, { it.shouldHandle == true } )
+
+        // Post an event that should be filtered out
+        eventBus.post(ExampleEvent(shouldHandle = false))
+
+        // Assert that the handler was not called
+        assertEquals(false, filteredEventHandled, "Handler should not have been called for filtered event")
+    }
+
+    @Test
+    fun eventTracingTest() {
+        // Create an EventBus with event tracing enabled
+        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_EVENT_TRACING)))
+
+        // Register a handler
+        eventBus.handler(ExampleEvent::class, { event ->
+            tracedEventHandled = true
+        })
+
+        // Post an event
+        eventBus.post(ExampleEvent())
+
+        // Assert that the handler was called
+        assertEquals(true, tracedEventHandled, "Handler should have been called with tracing enabled")
     }
 
     class ExampleEvent(val shouldHandle: Boolean = true) : Event
