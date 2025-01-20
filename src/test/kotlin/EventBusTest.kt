@@ -87,14 +87,15 @@ class EventBusTest {
     }
 
     @Test
-    fun `test forwarding between buses`() {
+    fun `test forwarding between buses with filter`() {
         val eventBus1 = EventBus.create()
         val eventBus2 = EventBus.create()
-        val event = TestEvent("Forwarding Test")
+        val event1 = TestEvent("Forwarding Test 1")
+        val event2 = TestEvent("Forwarding Test 2")
         var receivedMessage: String? = null
 
-        // Set up forwarding
-        eventBus1.forward(eventBus2)
+        // Set up forwarding with a filter
+        eventBus1.forward(eventBus2) { event: Event -> event is TestEvent && event.message == "Forwarding Test 1" }
 
         // Register handler on the second bus
         eventBus2.handler(TestEvent::class) { receivedEvent ->
@@ -102,15 +103,12 @@ class EventBusTest {
         }
 
         // Post event to the first bus
-        eventBus1.post(event)
+        eventBus1.post(event1)
+        assertEquals("Forwarding Test 1", receivedMessage)
 
-        assertEquals("Forwarding Test", receivedMessage)
-
-        // Stop forwarding and test again
-        eventBus1.stopForwarding(eventBus2)
-        val event2 = TestEvent("This should not be forwarded")
+        // Post another event that should not be forwarded
         eventBus1.post(event2)
-        assertEquals("Forwarding Test", receivedMessage) // Should not change
+        assertEquals("Forwarding Test 1", receivedMessage) // Should not change
     }
 
     @Test

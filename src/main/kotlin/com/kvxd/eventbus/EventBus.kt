@@ -48,7 +48,7 @@ class EventBus private constructor() {
     }
 
     private val handlers = ConcurrentHashMap<KClass<*>, CopyOnWriteArrayList<Handler<*>>>()
-    private val forwardedBuses = mutableSetOf<EventBus>()
+    private val forwardedBuses = mutableSetOf<Pair<EventBus, (Event) -> Boolean>>()
 
     /**
      * Registers a handler for a specific event type.
@@ -98,18 +98,23 @@ class EventBus private constructor() {
             }
         }
 
-        // Forward to all forwarded buses
-        forwardedBuses.forEach { it.post(event) }
+        // Forward to all forwarded buses if the filter allows
+        forwardedBuses.forEach { (bus, filter) ->
+            if (filter(event)) {
+                bus.post(event)
+            }
+        }
     }
 
     /**
-     * Forwards all events from this bus to another bus.
+     * Forwards all events from this bus to another bus, filtered by the provided predicate.
      *
      * @param targetBus The event bus to forward events to.
+     * @param filter A predicate that determines whether an event should be forwarded (default allows all events).
      * @return This event bus instance for method chaining.
      */
-    fun forward(targetBus: EventBus): EventBus {
-        forwardedBuses.add(targetBus)
+    fun forward(targetBus: EventBus, filter: (Event) -> Boolean = { true }): EventBus {
+        forwardedBuses.add(targetBus to filter)
         return this
     }
 
@@ -120,7 +125,7 @@ class EventBus private constructor() {
      * @return This event bus instance for method chaining.
      */
     fun stopForwarding(targetBus: EventBus): EventBus {
-        forwardedBuses.remove(targetBus)
+        forwardedBuses.removeAll { it.first == targetBus }
         return this
     }
 
