@@ -115,7 +115,30 @@ class EventBus private constructor() {
      */
     fun forward(targetBus: EventBus, filter: (Event) -> Boolean = { true }): EventBus {
         forwardedBuses.add(targetBus to filter)
-        return this
+        return targetBus
+    }
+
+    /**
+     * Forwards all events from this bus to another bus, filtered by the provided predicate.
+     *
+     * @param filter A predicate that determines whether an event should be forwarded (default allows all events).
+     * @return This event bus instance for method chaining.
+     */
+    fun forward(filter: (Event) -> Boolean = { true }): EventBus {
+        val bus = create()
+        forward(bus, filter)
+        return bus
+    }
+
+    /**
+     * Forwards all events from this bus to another bus.
+     *
+     * @return This event bus instance for method chaining.
+     */
+    fun forward(): EventBus {
+        val bus = create()
+        forward(bus)
+        return bus
     }
 
     /**

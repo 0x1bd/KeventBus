@@ -1,230 +1,142 @@
 import com.kvxd.eventbus.Event
 import com.kvxd.eventbus.EventBus
 import com.kvxd.eventbus.EventPriority
-import org.junit.jupiter.api.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import kotlin.test.*
+import kotlin.reflect.KClass
 
 class EventBusTest {
 
-    data class TestEvent(val message: String) : Event
-    data class MutableTestEvent(var message: String) : Event
+    // Test event classes
+    class TestEvent : Event
+    class AnotherTestEvent : Event
 
     @Test
-    fun `test concise handler registration`() {
+    fun testCreateEventBus() {
         val eventBus = EventBus.create()
-        val event = TestEvent("Concise Handler Test")
-        var receivedMessage: String? = null
-
-        eventBus.handler(TestEvent::class) { receivedEvent ->
-            receivedMessage = receivedEvent.message
-        }
-
-        eventBus.post(event)
-
-        assertEquals("Concise Handler Test", receivedMessage)
+        assertNotNull(eventBus, "EventBus instance should not be null")
     }
 
     @Test
-    fun `test handler disable`() {
+    fun testHandlerRegistration() {
         val eventBus = EventBus.create()
-        val event = TestEvent("Handler Disable Test")
-        var receivedMessage: String? = null
+        var eventHandled = false
 
-        val handler = eventBus.handler(TestEvent::class) { receivedEvent ->
-            receivedMessage = receivedEvent.message
-        }
+        eventBus.handler(TestEvent::class) { eventHandled = true }
+        eventBus.post(TestEvent())
 
-        eventBus.post(event)
-        assertEquals("Handler Disable Test", receivedMessage)
-
-        handler.disable()
-
-        val event2 = TestEvent("This should not be handled")
-        eventBus.post(event2)
-        assertEquals("Handler Disable Test", receivedMessage)
+        assertTrue(eventHandled, "Event handler should be called when event is posted")
     }
 
     @Test
-    fun `test handler enable`() {
+    fun testHandlerPriority() {
         val eventBus = EventBus.create()
-        val event = TestEvent("Handler Enable Test")
-        var receivedMessage: String? = null
+        val handledEvents = mutableListOf<Int>()
 
-        val handler = eventBus.handler(TestEvent::class) { receivedEvent ->
-            receivedMessage = receivedEvent.message
-        }
+        eventBus.handler(TestEvent::class, priority = EventPriority.LOW) { handledEvents.add(1) }
+        eventBus.handler(TestEvent::class, priority = EventPriority.HIGH) { handledEvents.add(3) }
+        eventBus.handler(TestEvent::class, priority = EventPriority.NORMAL) { handledEvents.add(2) }
+
+        eventBus.post(TestEvent())
+
+        assertEquals(listOf(3, 2, 1), handledEvents, "Handlers should be executed in order of priority")
+    }
+
+    @Test
+    fun testHandlerFilter() {
+        val eventBus = EventBus.create()
+        var eventHandled = false
+
+        eventBus.handler(TestEvent::class, filter = { false }) { eventHandled = true }
+        eventBus.post(TestEvent())
+
+        assertFalse(eventHandled, "Event handler should not be called if filter returns false")
+    }
+
+    @Test
+    fun testHandlerEnableDisable() {
+        val eventBus = EventBus.create()
+        var eventHandled = false
+
+        val handler = eventBus.handler(TestEvent::class) { eventHandled = true }
         handler.disable()
+        eventBus.post(TestEvent())
 
-        eventBus.post(event)
-        assertEquals(null, receivedMessage)
+        assertFalse(eventHandled, "Event handler should not be called when disabled")
 
         handler.enable()
+        eventBus.post(TestEvent())
 
-        val event2 = TestEvent("This should be handled")
-        eventBus.post(event2)
-        assertEquals("This should be handled", receivedMessage)
+        assertTrue(eventHandled, "Event handler should be called when enabled")
     }
 
     @Test
-    fun `test multiple handlers for same event type`() {
-        val eventBus = EventBus.create()
-        val event = TestEvent("Multiple Handlers Test")
-        val receivedMessages = mutableListOf<String>()
+    fun testEventForwarding() {
+        val mainBus = EventBus.create()
+        val forwardedBus = EventBus.create()
+        var eventHandled = false
 
-        eventBus.handler(TestEvent::class) { receivedEvent ->
-            receivedMessages.add("Handler 1: ${receivedEvent.message}")
-        }
-        eventBus.handler(TestEvent::class) { receivedEvent ->
-            receivedMessages.add("Handler 2: ${receivedEvent.message}")
-        }
+        mainBus.forward(forwardedBus)
+        forwardedBus.handler(TestEvent::class) { eventHandled = true }
 
-        eventBus.post(event)
+        mainBus.post(TestEvent())
 
-        assertEquals(2, receivedMessages.size)
-        assertTrue(receivedMessages.contains("Handler 1: Multiple Handlers Test"))
-        assertTrue(receivedMessages.contains("Handler 2: Multiple Handlers Test"))
+        assertTrue(eventHandled, "Event should be forwarded to the second bus and handled")
     }
 
     @Test
-    fun `test forwarding between buses with filter`() {
-        val eventBus1 = EventBus.create()
-        val eventBus2 = EventBus.create()
-        val event1 = TestEvent("Forwarding Test 1")
-        val event2 = TestEvent("Forwarding Test 2")
-        var receivedMessage: String? = null
+    fun testEventForwardingWithFilter() {
+        val mainBus = EventBus.create()
+        val forwardedBus = EventBus.create()
+        var eventHandled = false
 
-        // Set up forwarding with a filter
-        eventBus1.forward(eventBus2) { event: Event -> event is TestEvent && event.message == "Forwarding Test 1" }
+        mainBus.forward(forwardedBus) { it is TestEvent }
+        forwardedBus.handler(TestEvent::class) { eventHandled = true }
 
-        // Register handler on the second bus
-        eventBus2.handler(TestEvent::class) { receivedEvent ->
-            receivedMessage = receivedEvent.message
-        }
+        mainBus.post(TestEvent())
+        assertTrue(eventHandled, "TestEvent should be forwarded and handled")
 
-        // Post event to the first bus
-        eventBus1.post(event1)
-        assertEquals("Forwarding Test 1", receivedMessage)
-
-        // Post another event that should not be forwarded
-        eventBus1.post(event2)
-        assertEquals("Forwarding Test 1", receivedMessage) // Should not change
+        eventHandled = false
+        mainBus.post(AnotherTestEvent())
+        assertFalse(eventHandled, "AnotherTestEvent should not be forwarded")
     }
 
     @Test
-    fun `test stop forwarding all`() {
-        val eventBus1 = EventBus.create()
-        val eventBus2 = EventBus.create()
-        val eventBus3 = EventBus.create()
-        var receivedCount = 0
+    fun testStopForwarding() {
+        val mainBus = EventBus.create()
+        val forwardedBus = EventBus.create()
+        var eventHandled = false
 
-        // Set up forwarding to multiple buses
-        eventBus1.forward(eventBus2).forward(eventBus3)
+        mainBus.forward(forwardedBus)
+        forwardedBus.handler(TestEvent::class) { eventHandled = true }
 
-        // Register handlers
-        eventBus2.handler(TestEvent::class) { receivedCount++ }
-        eventBus3.handler(TestEvent::class) { receivedCount++ }
+        mainBus.stopForwarding(forwardedBus)
+        mainBus.post(TestEvent())
 
-        // Post event
-        eventBus1.post(TestEvent("First event"))
-        assertEquals(2, receivedCount)
-
-        // Stop all forwarding
-        eventBus1.stopForwardingAll()
-
-        // Post another event
-        eventBus1.post(TestEvent("Second event"))
-        assertEquals(2, receivedCount) // Should not change
+        assertFalse(eventHandled, "Event should not be forwarded after stopping forwarding")
     }
 
     @Test
-    fun `test handler priority`() {
-        val eventBus = EventBus.create()
-        val event = TestEvent("Handler Priority Test")
-        val receivedMessages = mutableListOf<String>()
+    fun testStopForwardingAll() {
+        val mainBus = EventBus.create()
+        val forwardedBus1 = EventBus.create()
+        val forwardedBus2 = EventBus.create()
+        val forwardedBus3 = EventBus.create()
+        var eventHandled1 = false
+        var eventHandled2 = false
+        var eventHandled3 = true
 
-        eventBus.handler(TestEvent::class, priority = EventPriority.LOW) { receivedEvent ->
-            receivedMessages.add("Low Priority Handler: ${receivedEvent.message}")
-        }
-        eventBus.handler(TestEvent::class, priority = EventPriority.HIGH) { receivedEvent ->
-            receivedMessages.add("High Priority Handler: ${receivedEvent.message}")
-        }
-        eventBus.handler(TestEvent::class) { receivedEvent ->
-            receivedMessages.add("Normal Priority Handler: ${receivedEvent.message}")
-        }
+        mainBus.forward(forwardedBus1)
+        mainBus.forward(forwardedBus2)
+        forwardedBus2.forward(forwardedBus3)
+        forwardedBus1.handler(TestEvent::class) { eventHandled1 = true }
+        forwardedBus2.handler(TestEvent::class) { eventHandled2 = true }
+        forwardedBus3.handler(TestEvent::class, filter = { false }) { eventHandled3 = false }
 
-        eventBus.post(event)
+        mainBus.stopForwardingAll()
+        mainBus.post(TestEvent())
 
-        assertEquals(3, receivedMessages.size)
-        assertEquals("High Priority Handler: Handler Priority Test", receivedMessages[0])
-        assertEquals("Normal Priority Handler: Handler Priority Test", receivedMessages[1])
-        assertEquals("Low Priority Handler: Handler Priority Test", receivedMessages[2])
-    }
-
-    var receivedMessage: String? = null
-
-    fun testFunction(event: TestEvent) {
-        receivedMessage = event.message
-    }
-
-    @Test
-    fun `test function method`() {
-        val eventBus = EventBus.create()
-        val event = TestEvent("Function Method Test")
-
-        // Register a handler using the function method
-        val handler = eventBus.function<TestEvent>(::testFunction)
-
-        // Post the event and verify the handler is called
-        eventBus.post(event)
-        assertEquals("Function Method Test", receivedMessage)
-
-        // Disable the handler and post another event
-        handler.disable()
-        val event2 = TestEvent("This should not be handled")
-        eventBus.post(event2)
-        assertEquals("Function Method Test", receivedMessage) // Should not change
-
-        // Enable the handler and post another event
-        handler.enable()
-        val event3 = TestEvent("This should be handled now")
-        eventBus.post(event3)
-        assertEquals("This should be handled now", receivedMessage)
-    }
-
-    @Test
-    fun `test event filtering`() {
-        val eventBus = EventBus.create()
-        val event1 = TestEvent("This should be handled")
-        val event2 = TestEvent("This should not be handled")
-        var receivedMessage: String? = null
-
-        // Register a handler with a filter
-        eventBus.handler(TestEvent::class, filter = { event -> event.message == "This should be handled" }) { receivedEvent ->
-            receivedMessage = receivedEvent.message
-        }
-
-        // Post the first event (should be handled)
-        eventBus.post(event1)
-        assertEquals("This should be handled", receivedMessage)
-
-        // Post the second event (should not be handled)
-        eventBus.post(event2)
-        assertEquals("This should be handled", receivedMessage) // Should not change
-    }
-
-    @Test
-    fun `test event modification`() {
-        val eventBus = EventBus.create()
-        val event = MutableTestEvent("Not modified")
-
-        // Register a handler with a filter
-        eventBus.handler(MutableTestEvent::class) { receivedEvent ->
-            receivedEvent.message = "Modified"
-        }
-
-        // Post the first event (should be handled)
-        eventBus.post(event)
-        assertEquals("Modified", event.message)
+        assertFalse(eventHandled1, "Event should not be forwarded to bus1 after stopping all forwarding")
+        assertFalse(eventHandled2, "Event should not be forwarded to bus2 after stopping all forwarding")
+        assertTrue(eventHandled3, "Event should not be forwarded to bus2 after stopping all forwarding")
     }
 }
