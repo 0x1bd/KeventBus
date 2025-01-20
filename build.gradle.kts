@@ -1,9 +1,9 @@
 plugins {
-    kotlin("jvm") version "2.0.21"
+    kotlin("jvm") version "2.1.0"
     id("maven-publish")
 }
 
-group = "com.github.meo209"
+group = "com.kvxd"
 version = "1.0-SNAPSHOT"
 
 repositories {
@@ -27,9 +27,9 @@ publishing {
     publications {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
-            groupId = "com.github.meo209"
-            artifactId = "keventbus" // Replace with your desired artifact ID
-            version = "1.0-SNAPSHOT"
+            groupId = this.groupId
+            artifactId = "keventbus"
+            version = this.version
         }
     }
 }

@@ -1,160 +1,197 @@
-import com.github.meo209.keventbus.Event
-import com.github.meo209.keventbus.EventBus
-import org.junit.jupiter.api.assertThrows
-import kotlin.test.Test
+import com.kvxd.eventbus.Event
+import com.kvxd.eventbus.EventBus
+import com.kvxd.eventbus.EventPriority
+import com.kvxd.eventbus.handler
+import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class EventBusTest {
 
-    private var functionTargetCalled = false
-    private var directTargetCalled = false
-    private var scopedTargetCalled = false
-    private var contextAwareTargetCalled = false
-    private var inheritanceTargetCalled = false
-    private var asyncTargetCalled = false
-    private var filteredEventHandled = false
-    private var tracedEventHandled = false
+    data class TestEvent(val message: String) : Event
 
-    private fun functionTarget(event: ExampleEvent) {
-        functionTargetCalled = true
+    @Test
+    fun `test concise handler registration`() {
+        val eventBus = EventBus.createScoped()
+        val event = TestEvent("Concise Handler Test")
+        var receivedMessage: String? = null
+
+        eventBus.handler<TestEvent> { receivedEvent ->
+            receivedMessage = receivedEvent.message
+        }
+
+        eventBus.post(event)
+
+        assertEquals("Concise Handler Test", receivedMessage)
     }
 
     @Test
-    fun globalTest() {
-        // Register a direct handler
-        EventBus.global().handler(ExampleEvent::class, {
-            directTargetCalled = true
-        })
+    fun `test handler disable`() {
+        val eventBus = EventBus.createScoped()
+        val event = TestEvent("Handler Disable Test")
+        var receivedMessage: String? = null
 
-        // Register a function target
-        EventBus.global().function(::functionTarget)
+        val handler = eventBus.handler<TestEvent> { receivedEvent ->
+            receivedMessage = receivedEvent.message
+        }
 
-        // Post an event and check if both handlers are called
-        EventBus.global().post(ExampleEvent())
+        eventBus.post(event)
+        assertEquals("Handler Disable Test", receivedMessage)
 
-        // Assert that both handlers were called
-        assertEquals(true, functionTargetCalled, "FunctionTarget should have been called")
-        assertEquals(true, directTargetCalled, "DirectTarget should have been called")
+        handler.disable()
+
+        val event2 = TestEvent("This should not be handled")
+        eventBus.post(event2)
+        assertEquals("Handler Disable Test", receivedMessage)
     }
 
     @Test
-    fun scopeTest() {
-        // Create a scoped event bus
-        val scope = EventBus.createScoped()
+    fun `test handler enable`() {
+        val eventBus = EventBus.createScoped()
+        val event = TestEvent("Handler Enable Test")
+        var receivedMessage: String? = null
 
-        // Register a handler in the scoped event bus
-        scope.handler(ExampleEvent2::class, { event ->
-            scopedTargetCalled = true
-        })
+        val handler = eventBus.handler<TestEvent> { receivedEvent ->
+            receivedMessage = receivedEvent.message
+        }
+        handler.disable()
 
-        // Post an event to the global event bus (should not trigger the scoped handler)
-        EventBus.global().post(ExampleEvent2())
+        eventBus.post(event)
+        assertEquals(null, receivedMessage)
 
-        // Assert that the scoped handler was not called
-        assertEquals(false, scopedTargetCalled, "Scoped handler should not have been called")
+        handler.enable()
 
-        // Post an event to the scoped event bus
-        scope.post(ExampleEvent2())
-
-        // Assert that the scoped handler was called
-        assertEquals(true, scopedTargetCalled, "Scoped handler should have been called")
+        val event2 = TestEvent("This should be handled")
+        eventBus.post(event2)
+        assertEquals("This should be handled", receivedMessage)
     }
 
     @Test
-    fun contextAwareTest() {
-        // Register a context-aware handler
-        EventBus.global().handler(ExampleEvent::class, { event ->
-            contextAwareTargetCalled = true
-        }, { event -> event.shouldHandle })
+    fun `test multiple handlers for same event type`() {
+        val eventBus = EventBus.createScoped()
+        val event = TestEvent("Multiple Handlers Test")
+        val receivedMessages = mutableListOf<String>()
 
-        // Post an event that should not trigger the handler
-        EventBus.global().post(ExampleEvent(shouldHandle = false))
+        eventBus.handler<TestEvent> { receivedEvent ->
+            receivedMessages.add("Handler 1: ${receivedEvent.message}")
+        }
+        eventBus.handler<TestEvent> { receivedEvent ->
+            receivedMessages.add("Handler 2: ${receivedEvent.message}")
+        }
 
-        // Assert that the handler was not called
-        assertEquals(false, contextAwareTargetCalled, "Context-aware handler should not have been called")
+        eventBus.post(event)
 
-        // Post an event that should trigger the handler
-        EventBus.global().post(ExampleEvent(shouldHandle = true))
-
-        // Assert that the handler was called
-        assertEquals(true, contextAwareTargetCalled, "Context-aware handler should have been called")
+        assertEquals(2, receivedMessages.size)
+        assertTrue(receivedMessages.contains("Handler 1: Multiple Handlers Test"))
+        assertTrue(receivedMessages.contains("Handler 2: Multiple Handlers Test"))
     }
 
     @Test
-    fun inheritanceTest() {
-        // Create an EventBus with event inheritance enabled
-        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_EVENT_INHERITANCE)))
+    fun `test forwarding between buses`() {
+        val eventBus1 = EventBus.createScoped()
+        val eventBus2 = EventBus.createScoped()
+        val event = TestEvent("Forwarding Test")
+        var receivedMessage: String? = null
 
-        // Register a handler for the base event
-        eventBus.handler(BaseEvent::class, { event ->
-            inheritanceTargetCalled = true
-        })
+        // Set up forwarding
+        eventBus1.forward(eventBus2)
 
-        // Post a subclass event
-        eventBus.post(SpecificEvent())
+        // Register handler on the second bus
+        eventBus2.handler<TestEvent> { receivedEvent ->
+            receivedMessage = receivedEvent.message
+        }
 
-        // Assert that the handler for the base event was called
-        assertEquals(true, inheritanceTargetCalled, "Handler for BaseEvent should have been called")
+        // Post event to the first bus
+        eventBus1.post(event)
+
+        assertEquals("Forwarding Test", receivedMessage)
+
+        // Stop forwarding and test again
+        eventBus1.stopForwarding(eventBus2)
+        val event2 = TestEvent("This should not be forwarded")
+        eventBus1.post(event2)
+        assertEquals("Forwarding Test", receivedMessage) // Should not change
     }
 
     @Test
-    fun asyncProcessingTest() {
-        // Create an EventBus with async processing enabled
-        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_ASYNC_PROCESSING)))
+    fun `test stop forwarding all`() {
+        val eventBus1 = EventBus.createScoped()
+        val eventBus2 = EventBus.createScoped()
+        val eventBus3 = EventBus.createScoped()
+        var receivedCount = 0
 
-        // Register a handler
-        eventBus.handler(ExampleEvent::class, { event ->
-            asyncTargetCalled = true
-        })
+        // Set up forwarding to multiple buses
+        eventBus1.forward(eventBus2).forward(eventBus3)
 
-        // Post an event
-        eventBus.post(ExampleEvent())
+        // Register handlers
+        eventBus2.handler<TestEvent> { receivedCount++ }
+        eventBus3.handler<TestEvent> { receivedCount++ }
 
-        // Wait for the async processing to complete
-        Thread.sleep(100)
+        // Post event
+        eventBus1.post(TestEvent("First event"))
+        assertEquals(2, receivedCount)
 
-        // Assert that the handler was called
-        assertEquals(true, asyncTargetCalled, "Handler should have been called asynchronously")
+        // Stop all forwarding
+        eventBus1.stopForwardingAll()
+
+        // Post another event
+        eventBus1.post(TestEvent("Second event"))
+        assertEquals(2, receivedCount) // Should not change
+    }
+
+
+    @Test
+    fun `test handler priority`() {
+        val eventBus = EventBus.createScoped()
+        val event = TestEvent("Handler Priority Test")
+        val receivedMessages = mutableListOf<String>()
+
+        eventBus.handler<TestEvent>(priority = EventPriority.LOW) { receivedEvent ->
+            receivedMessages.add("Low Priority Handler: ${receivedEvent.message}")
+        }
+        eventBus.handler<TestEvent>(priority = EventPriority.HIGH) { receivedEvent ->
+            receivedMessages.add("High Priority Handler: ${receivedEvent.message}")
+        }
+        eventBus.handler<TestEvent> { receivedEvent ->
+            receivedMessages.add("Normal Priority Handler: ${receivedEvent.message}")
+        }
+
+        eventBus.post(event)
+
+        assertEquals(3, receivedMessages.size)
+        assertEquals("High Priority Handler: Handler Priority Test", receivedMessages[0])
+        assertEquals("Normal Priority Handler: Handler Priority Test", receivedMessages[1])
+        assertEquals("Low Priority Handler: Handler Priority Test", receivedMessages[2])
+    }
+
+    var receivedMessage: String? = null
+
+    fun testFunction(event: TestEvent) {
+        receivedMessage = event.message
     }
 
     @Test
-    fun eventFilteringTest() {
-        // Create an EventBus with event filtering enabled
-        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_EVENT_FILTERING)))
+    fun `test function method`() {
+        val eventBus = EventBus.createScoped()
+        val event = TestEvent("Function Method Test")
 
-        // Register a handler
-        eventBus.handler(ExampleEvent::class, { event ->
-            filteredEventHandled = true
-        }, { it.shouldHandle == true } )
+        // Register a handler using the function method
+        val handler = eventBus.function<TestEvent>(::testFunction)
 
-        // Post an event that should be filtered out
-        eventBus.post(ExampleEvent(shouldHandle = false))
+        // Post the event and verify the handler is called
+        eventBus.post(event)
+        assertEquals("Function Method Test", receivedMessage)
 
-        // Assert that the handler was not called
-        assertEquals(false, filteredEventHandled, "Handler should not have been called for filtered event")
+        // Disable the handler and post another event
+        handler.disable()
+        val event2 = TestEvent("This should not be handled")
+        eventBus.post(event2)
+        assertEquals("Function Method Test", receivedMessage) // Should not change
+
+        // Enable the handler and post another event
+        handler.enable()
+        val event3 = TestEvent("This should be handled now")
+        eventBus.post(event3)
+        assertEquals("This should be handled now", receivedMessage)
     }
-
-    @Test
-    fun eventTracingTest() {
-        // Create an EventBus with event tracing enabled
-        val eventBus = EventBus.createScoped(EventBus.EventBusConfig(setOf(EventBus.EventBusConfigFlag.ENABLE_EVENT_TRACING)))
-
-        // Register a handler
-        eventBus.handler(ExampleEvent::class, { event ->
-            tracedEventHandled = true
-        })
-
-        // Post an event
-        eventBus.post(ExampleEvent())
-
-        // Assert that the handler was called
-        assertEquals(true, tracedEventHandled, "Handler should have been called with tracing enabled")
-    }
-
-    class ExampleEvent(val shouldHandle: Boolean = true) : Event
-    class ExampleEvent2 : Event
-
-    // Define an event hierarchy for inheritance testing
-    open class BaseEvent : Event
-    class SpecificEvent : BaseEvent()
 }
