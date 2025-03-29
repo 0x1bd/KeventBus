@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * A synchronous event bus that allows components to communicate by publishing and subscribing to events.
  */
-class EventBus private constructor(
+open class EventBus private constructor(
     private val scope: CoroutineScope
 ) {
 
