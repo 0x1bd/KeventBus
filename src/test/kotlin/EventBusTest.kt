@@ -1,6 +1,8 @@
 import com.kvxd.eventbus.Event
 import com.kvxd.eventbus.EventBus
 import com.kvxd.eventbus.EventPriority
+import com.kvxd.eventbus.handler
+import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 import kotlin.reflect.KClass
 
@@ -17,7 +19,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testHandlerRegistration() {
+    fun testHandlerRegistration() = runTest {
         val eventBus = EventBus.create()
         var eventHandled = false
 
@@ -28,7 +30,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testHandlerPriority() {
+    fun testHandlerPriority() = runTest {
         val eventBus = EventBus.create()
         val handledEvents = mutableListOf<Int>()
 
@@ -42,7 +44,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testHandlerFilter() {
+    fun testHandlerFilter() = runTest {
         val eventBus = EventBus.create()
         var eventHandled = false
 
@@ -53,7 +55,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testHandlerEnableDisable() {
+    fun testHandlerEnableDisable() = runTest {
         val eventBus = EventBus.create()
         var eventHandled = false
 
@@ -70,7 +72,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testEventForwarding() {
+    fun testEventForwarding() = runTest {
         val mainBus = EventBus.create()
         val forwardedBus = EventBus.create()
         var eventHandled = false
@@ -84,7 +86,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testEventForwardingWithFilter() {
+    fun testEventForwardingWithFilter() = runTest {
         val mainBus = EventBus.create()
         val forwardedBus = EventBus.create()
         var eventHandled = false
@@ -101,7 +103,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testStopForwarding() {
+    fun testStopForwarding() = runTest {
         val mainBus = EventBus.create()
         val forwardedBus = EventBus.create()
         var eventHandled = false
@@ -116,7 +118,7 @@ class EventBusTest {
     }
 
     @Test
-    fun testStopForwardingAll() {
+    fun testStopForwardingAll() = runTest {
         val mainBus = EventBus.create()
         val forwardedBus1 = EventBus.create()
         val forwardedBus2 = EventBus.create()

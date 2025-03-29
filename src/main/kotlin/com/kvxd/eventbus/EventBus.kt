@@ -1,5 +1,8 @@
 package com.kvxd.eventbus
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlin.reflect.KClass
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ConcurrentHashMap
@@ -7,7 +10,9 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * A synchronous event bus that allows components to communicate by publishing and subscribing to events.
  */
-class EventBus private constructor() {
+class EventBus private constructor(
+    private val scope: CoroutineScope
+) {
 
     companion object {
         /**
@@ -15,7 +20,7 @@ class EventBus private constructor() {
          *
          * @return A new instance of the event bus.
          */
-        fun create(): EventBus = EventBus()
+        fun create(scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())): EventBus = EventBus(scope)
     }
 
     /**
@@ -27,28 +32,18 @@ class EventBus private constructor() {
      * @property filter A predicate that determines whether the handler should process the event.
      */
     data class Handler<T : Event>(
-        val handler: (T) -> Unit,
+        val handler: suspend (T) -> Unit,  // Changed to suspend function
         var isEnabled: Boolean = true,
         val priority: EventPriority = EventPriority.NORMAL,
-        val filter: (T) -> Boolean = { true } // Default filter allows all events
+        val filter: (T) -> Boolean = { true }
     ) {
-        /**
-         * Disables this handler, preventing it from processing events.
-         */
-        fun disable() {
-            isEnabled = false
-        }
-
-        /**
-         * Enables this handler, allowing it to process events.
-         */
-        fun enable() {
-            isEnabled = true
-        }
+        fun disable() { isEnabled = false }
+        fun enable() { isEnabled = true }
     }
 
     private val handlers = ConcurrentHashMap<KClass<*>, CopyOnWriteArrayList<Handler<*>>>()
     private val forwardedBuses = mutableSetOf<Pair<EventBus, (Event) -> Boolean>>()
+    var onError: (Throwable) -> Unit = {}  // Global error handler
 
     /**
      * Registers a handler for a specific event type.
@@ -63,13 +58,12 @@ class EventBus private constructor() {
         eventClass: KClass<T>,
         priority: EventPriority = EventPriority.NORMAL,
         filter: (T) -> Boolean = { true },
-        handler: (T) -> Unit
+        handler: suspend (T) -> Unit
     ): Handler<T> {
-        @Suppress("UNCHECKED_CAST") val typedHandlers =
-            handlers.getOrPut(eventClass) { CopyOnWriteArrayList() } as CopyOnWriteArrayList<Handler<T>>
+        @Suppress("UNCHECKED_CAST")
+        val typedHandlers = handlers.getOrPut(eventClass) { CopyOnWriteArrayList() } as CopyOnWriteArrayList<Handler<T>>
         val newHandler = Handler(handler, priority = priority, filter = filter)
         typedHandlers.add(newHandler)
-        // Sort handlers by priority (highest first)
         typedHandlers.sortByDescending { it.priority }
         return newHandler
     }
@@ -89,12 +83,16 @@ class EventBus private constructor() {
      *
      * @param event The event to post.
      */
-    fun <T : Event> post(event: T) {
+    suspend fun <T : Event> post(event: T) {
         // Handle local handlers
         handlers[event::class]?.forEach { handler ->
             @Suppress("UNCHECKED_CAST") val typedHandler = handler as Handler<T>
             if (typedHandler.isEnabled && typedHandler.filter(event)) {
-                typedHandler.handler(event)
+                try {
+                    typedHandler.handler(event)
+                } catch (e: Exception) {
+                    onError(e)
+                }
             }
         }
 
@@ -173,8 +171,8 @@ class EventBus private constructor() {
  */
 inline fun <reified T : Event> EventBus.handler(
     priority: EventPriority = EventPriority.NORMAL,
-    noinline handler: (T) -> Unit,
-    noinline filter: (T) -> Boolean = { true }
+    noinline filter: (T) -> Boolean = { true },
+    noinline handler: suspend (T) -> Unit
 ): EventBus.Handler<T> {
     return this.handler(T::class, priority, filter, handler)
 }
