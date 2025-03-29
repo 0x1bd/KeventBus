@@ -3,25 +3,14 @@ package com.kvxd.eventbus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlin.reflect.KClass
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.reflect.KClass
 
 /**
  * A synchronous event bus that allows components to communicate by publishing and subscribing to events.
  */
-open class EventBus private constructor(
-    private val scope: CoroutineScope
-) {
-
-    companion object {
-        /**
-         * Creates and returns a new instance of the [EventBus].
-         *
-         * @return A new instance of the event bus.
-         */
-        fun create(scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())): EventBus = EventBus(scope)
-    }
+open class EventBus{
 
     /**
      * Represents an event handler with its associated properties.
@@ -37,8 +26,13 @@ open class EventBus private constructor(
         val priority: EventPriority = EventPriority.NORMAL,
         val filter: (T) -> Boolean = { true }
     ) {
-        fun disable() { isEnabled = false }
-        fun enable() { isEnabled = true }
+        fun disable() {
+            isEnabled = false
+        }
+
+        fun enable() {
+            isEnabled = true
+        }
     }
 
     private val handlers = ConcurrentHashMap<KClass<*>, CopyOnWriteArrayList<Handler<*>>>()
@@ -123,7 +117,7 @@ open class EventBus private constructor(
      * @return This event bus instance for method chaining.
      */
     fun forward(filter: (Event) -> Boolean = { true }): EventBus {
-        val bus = create()
+        val bus = EventBus()
         forward(bus, filter)
         return bus
     }
@@ -133,8 +127,8 @@ open class EventBus private constructor(
      *
      * @return This event bus instance for method chaining.
      */
-    fun forward(): EventBus {
-        val bus = create()
+    fun forward(scope: CoroutineScope): EventBus {
+        val bus = EventBus()
         forward(bus)
         return bus
     }

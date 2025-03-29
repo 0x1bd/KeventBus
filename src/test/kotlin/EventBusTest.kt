@@ -14,13 +14,13 @@ class EventBusTest {
 
     @Test
     fun testCreateEventBus() {
-        val eventBus = EventBus.create()
+        val eventBus = EventBus()
         assertNotNull(eventBus, "EventBus instance should not be null")
     }
 
     @Test
     fun testHandlerRegistration() = runTest {
-        val eventBus = EventBus.create()
+        val eventBus = EventBus()
         var eventHandled = false
 
         eventBus.handler(TestEvent::class) { eventHandled = true }
@@ -31,7 +31,7 @@ class EventBusTest {
 
     @Test
     fun testHandlerPriority() = runTest {
-        val eventBus = EventBus.create()
+        val eventBus = EventBus()
         val handledEvents = mutableListOf<Int>()
 
         eventBus.handler(TestEvent::class, priority = EventPriority.LOW) { handledEvents.add(1) }
@@ -45,7 +45,7 @@ class EventBusTest {
 
     @Test
     fun testHandlerFilter() = runTest {
-        val eventBus = EventBus.create()
+        val eventBus = EventBus()
         var eventHandled = false
 
         eventBus.handler(TestEvent::class, filter = { false }) { eventHandled = true }
@@ -56,7 +56,7 @@ class EventBusTest {
 
     @Test
     fun testHandlerEnableDisable() = runTest {
-        val eventBus = EventBus.create()
+        val eventBus = EventBus()
         var eventHandled = false
 
         val handler = eventBus.handler(TestEvent::class) { eventHandled = true }
@@ -73,8 +73,8 @@ class EventBusTest {
 
     @Test
     fun testEventForwarding() = runTest {
-        val mainBus = EventBus.create()
-        val forwardedBus = EventBus.create()
+        val mainBus = EventBus()
+        val forwardedBus = EventBus()
         var eventHandled = false
 
         mainBus.forward(forwardedBus)
@@ -87,8 +87,8 @@ class EventBusTest {
 
     @Test
     fun testEventForwardingWithFilter() = runTest {
-        val mainBus = EventBus.create()
-        val forwardedBus = EventBus.create()
+        val mainBus = EventBus()
+        val forwardedBus = EventBus()
         var eventHandled = false
 
         mainBus.forward(forwardedBus) { it is TestEvent }
@@ -104,8 +104,8 @@ class EventBusTest {
 
     @Test
     fun testStopForwarding() = runTest {
-        val mainBus = EventBus.create()
-        val forwardedBus = EventBus.create()
+        val mainBus = EventBus()
+        val forwardedBus = EventBus()
         var eventHandled = false
 
         mainBus.forward(forwardedBus)
@@ -119,10 +119,10 @@ class EventBusTest {
 
     @Test
     fun testStopForwardingAll() = runTest {
-        val mainBus = EventBus.create()
-        val forwardedBus1 = EventBus.create()
-        val forwardedBus2 = EventBus.create()
-        val forwardedBus3 = EventBus.create()
+        val mainBus = EventBus()
+        val forwardedBus1 = EventBus()
+        val forwardedBus2 = EventBus()
+        val forwardedBus3 = EventBus()
         var eventHandled1 = false
         var eventHandled2 = false
         var eventHandled3 = true
